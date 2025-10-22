@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Absensi Gerbang Sekolah</title>
+
+<!-- 🎨 Font baru -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#f6f8fc;
+    --card:#fff;
+    --accent:#2563eb;
+    --text:#1e293b;
+    --ok:#10b981;
+    --warn:#f59e0b;
+    --bad:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:'Poppins',sans-serif;
+    background:linear-gradient(135deg,#eaf2ff,#ffffff);
+    color:var(--text);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:20px;
+  }
+  h1{margin:0;color:var(--accent);font-weight:700;font-size:1.5rem}
+  .app{width:100%;max-width:960px;background:var(--card);
+       border-radius:16px;padding:20px;
+       box-shadow:0 8px 30px rgba(0,0,0,0.08)}
+  .grid{display:grid;grid-template-columns:1fr 400px;gap:16px}
+  label{font-weight:500;font-size:14px;margin-top:8px;display:block}
+  input,select{width:100%;padding:10px;border-radius:10px;
+               border:1px solid #cbd5e1;margin-top:6px;font-size:14px}
+  button{border:0;border-radius:10px;padding:8px 12px;cursor:pointer;
+         color:#fff;font-weight:500;font-size:14px}
+  .btn-primary{background:var(--accent)}
+  .btn-success{background:var(--ok)}
+  .btn-warn{background:var(--warn)}
+  .btn-danger{background:var(--bad)}
+  video,canvas{width:100%;border-radius:10px;background:#000;height:260px;object-fit:cover}
+  .muted{font-size:13px;color:#64748b;margin-top:6px}
+  .panel{background:#fafbff;padding:14px;border-radius:12px}
+  #clock{font-family:'Roboto Mono',monospace;font-size:16px;font-weight:600}
+  .list{display:flex;flex-direction:column;gap:8px;max-height:500px;overflow:auto;margin-top:8px}
+  .entry{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+  .thumb{width:70px;height:70px;border-radius:8px;object-fit:cover}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="app">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h1>📋 Absensi Masuk Gerbang Sekolah</h1>
+      <div>
+        <button id="exportCsvBtn" class="btn-primary">⬇️ Ekspor CSV</button>
+        <button id="clearAllBtn" class="btn-danger">🗑️ Hapus Semua</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Form -->
+      <div class="panel">
+        <div>
+          <div id="clock"></div>
+          <div id="date" class="muted"></div>
+        </div>
+
+        <label>Nama</label>
+        <input type="text" id="nameInput" placeholder="Masukkan nama lengkap">
+
+        <label>Kelas</label>
+        <select id="classSelect">
+          <option value="10">Kelas 10</option>
+          <option value="11">Kelas 11</option>
+          <option value="12">Kelas 12</option>
+        </select>
+
+        <label>Jurusan</label>
+        <select id="majorSelect"></select>
+
+        <label>Cara Datang</label>
+        <select id="transportSelect">
+          <option value="Jalan Kaki">Jalan Kaki</option>
+          <option value="Diantar">Diantar</option>
+          <option value="Kendaraan">Kendaraan</option>
+        </select>
+
+        <div id="vehicleOptions" style="display:none">
+          <label>Jenis Kendaraan</label>
+          <select id="vehicleType">
+            <option value="Motor">Motor</option>
+            <option value="Mobil">Mobil</option>
+            <option value="Bus">Bus</option>
+          </select>
+
+          <div id="helmetWrap" style="display:none;margin-top:8px">
+            <label><input type="checkbox" id="helmetCheck"> Memakai Helm (khusus motor)</label>
+          </div>
+        </div>
+
+        <div style="margin-top:10px">
+          <button id="startCamBtn" class="btn-primary">🎥 Nyalakan Kamera</button>
+          <button id="snapBtn" class="btn-success">📸 Ambil Foto & Absen</button>
+          <button id="stopCamBtn" class="btn-warn">⏹️ Matikan Kamera</button>
+        </div>
+
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none"></canvas>
+        <div id="message" class="muted">Hidupkan kamera lalu tekan “Ambil Foto & Absen”.</div>
+      </div>
+
+      <!-- Rekap -->
+      <div class="panel">
+        <strong>Rekap Absensi Hari Ini</strong>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ==== Waktu Realtime ==== */
+function updateClock(){
+  const d=new Date();
+  document.getElementById('clock').textContent='⏰ '+d.toLocaleTimeString('id-ID',{hour12:false});
+  document.getElementById('date').textContent='📅 '+d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+setInterval(updateClock,1000);updateClock();
+
+/* ==== Kelas & Jurusan ==== */
+const classSelect=document.getElementById('classSelect');
+const majorSelect=document.getElementById('majorSelect');
+const jurusan10=[
+  'Agribisnis Tanaman',
+  'Agribisnis Ternak Unggas',
+  'Agribisnis Perikanan Air Tawar',
+  'Agribisnis Pengolahan Hasil Pertanian',
+  'Teknik Jaringan Komputer dan Telekomunikasi'
+];
+const jurusan11_12=[
+  'Agribisnis Tanaman Perkebunan',
+  'Agribisnis Tanaman Perkebunan Holtikultura',
+  'Agribisnis Ternak Unggas',
+  'Agribisnis Perikanan Air Tawar',
+  'Agribisnis Pengolahan Hasil Pertanian',
+  'Teknik Jaringan Komputer dan Telekomunikasi'
+];
+function updateMajor(){
+  const val=classSelect.value;
+  majorSelect.innerHTML='';
+  (val==='10'?jurusan10:jurusan11_12).forEach(j=>{
+    const opt=document.createElement('option');
+    opt.textContent=j;opt.value=j;
+    majorSelect.appendChild(opt);
+  });
+}
+classSelect.addEventListener('change',updateMajor);
+updateMajor();
+
+/* ==== Kamera ==== */
+let stream=null;
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+
+async function startCam(){
+  try{stream=await navigator.mediaDevices.getUserMedia({video:true});
+      video.srcObject=stream;}
+  catch(e){alert('Tidak bisa mengakses kamera: '+e.message);}
+}
+function stopCam(){
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+}
+document.getElementById('startCamBtn').onclick=startCam;
+document.getElementById('stopCamBtn').onclick=stopCam;
+
+/* ==== Transport ==== */
+const transportSelect=document.getElementById('transportSelect');
+transportSelect.addEventListener('change',()=>{
+  const val=transportSelect.value;
+  document.getElementById('vehicleOptions').style.display=(val==='Kendaraan')?'block':'none';
+});
+document.getElementById('vehicleType').addEventListener('change',e=>{
+  document.getElementById('helmetWrap').style.display=(e.target.value==='Motor')?'block':'none';
+});
+
+/* ==== Data ==== */
+const list=document.getElementById('list');
+let data=JSON.parse(localStorage.getItem('absenGerbang')||'[]');
+function render(){
+  list.innerHTML=data.map(e=>`
+  <div class="entry">
+    <img class="thumb" src="${e.photo}">
+    <div>
+      <b>${e.nama}</b><br>
+      ${e.kelas} - ${e.jurusan}<br>
+      ${e.transport}${e.kendaraan?` / ${e.kendaraan}`:''}<br>
+      ${e.waktu} - ${e.tanggal}<br>
+      <span style="color:${e.status.includes('Ditolak')?'#ef4444':(e.status.includes('Terlambat')?'#f59e0b':'#10b981')}">${e.status}</span>
+    </div>
+  </div>`).join('')||'<div class="muted">Belum ada data</div>';
+}
+render();
+
+/* ==== Tombol Absen ==== */
+document.getElementById('snapBtn').onclick=()=>{
+  const nama=document.getElementById('nameInput').value.trim();
+  if(!nama)return alert('Masukkan nama!');
+  const kelas='Kelas '+classSelect.value;
+  const jurusan=majorSelect.value;
+  const transport=transportSelect.value;
+  const kendaraan=document.getElementById('vehicleType').value;
+  const helm=document.getElementById('helmetCheck').checked;
+
+  canvas.width=video.videoWidth;
+  canvas.height=video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0);
+  const photo=canvas.toDataURL('image/png');
+
+  const d=new Date();
+  const waktu=d.toLocaleTimeString('id-ID',{hour12:false});
+  const tanggal=d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  // Tentukan status
+  let status='';
+  const jamMasuk=d.getHours();
+  const menitMasuk=d.getMinutes();
+
+  if(transport==='Kendaraan'&&kendaraan==='Motor'&&!helm){
+    status='Ditolak — Tidak Memakai Helm';
+  }else{
+    if(jamMasuk===7 && menitMasuk<=15){
+      status='Tepat Waktu';
+    }else if(jamMasuk<7){
+      status='Tepat Waktu';
+    }else{
+      status='Terlambat';
+    }
+  }
+
+  data.push({nama,kelas,jurusan,transport,kendaraan,helm,photo,waktu,tanggal,status});
+  localStorage.setItem('absenGerbang',JSON.stringify(data));
+  render();
+  alert('Absensi tersimpan!');
+};
+
+/* ==== Ekspor CSV & Hapus ==== */
+document.getElementById('exportCsvBtn').onclick=()=>{
+  const header=['Nama','Kelas','Jurusan','Transport','Kendaraan','Helm','Waktu','Tanggal','Status'];
+  const rows=data.map(e=>[e.nama,e.kelas,e.jurusan,e.transport,e.kendaraan,e.helm,e.waktu,e.tanggal,e.status]);
+  const csv=[header,...rows].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='absensi_gerbang.csv';a.click();URL.revokeObjectURL(url);
+};
+document.getElementById('clearAllBtn').onclick=()=>{
+  if(confirm('Hapus semua data absensi?')){
+    localStorage.removeItem('absenGerbang');data=[];render();
+  }
+};
+</script>
+</body>
+</html>
+ 
